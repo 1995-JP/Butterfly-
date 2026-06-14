@@ -1,0 +1,486 @@
+import { useState } from "react";
+
+const COLORS = {
+  bg: "#050510",
+  panel: "#0a0a1f",
+  border: "#1a1a3e",
+  accent1: "#7c3aed",
+  accent2: "#3b82f6",
+  accent3: "#06b6d4",
+  gold: "#f59e0b",
+  green: "#10b981",
+  red: "#ef4444",
+  yellow: "#eab308",
+  text: "#e2e8f0",
+  muted: "#64748b",
+  highlight: "#a78bfa",
+};
+
+const Node = ({ x, y, size = 12, color = COLORS.accent1, label, sublabel, onClick, active }) => (
+  <g onClick={onClick} style={{ cursor: onClick ? "pointer" : "default" }}>
+    <circle cx={x} cy={y} r={size + 3} fill={color} opacity={0.15} />
+    <circle cx={x} cy={y} r={size} fill={color} opacity={active ? 1 : 0.85} />
+    <circle cx={x} cy={y} r={size * 0.5} fill="white" opacity={0.25} />
+    {label && (
+      <text x={x} y={y - size - 5} textAnchor="middle" fill={COLORS.text} fontSize="8" fontFamily="monospace" fontWeight="bold">
+        {label}
+      </text>
+    )}
+    {sublabel && (
+      <text x={x} y={y + size + 12} textAnchor="middle" fill={COLORS.muted} fontSize="7" fontFamily="monospace">
+        {sublabel}
+      </text>
+    )}
+  </g>
+);
+
+const Link = ({ x1, y1, x2, y2, color = COLORS.accent1, dashed, width = 1, opacity = 0.6 }) => (
+  <line
+    x1={x1} y1={y1} x2={x2} y2={y2}
+    stroke={color}
+    strokeWidth={width}
+    strokeDasharray={dashed ? "4 3" : undefined}
+    opacity={opacity}
+  />
+);
+
+const SeedDiagram = () => {
+  const cx = 80, cy = 80, r = 55;
+  const sides = [3, 5, 6, 7, 8, 10, 12, 14, 16, 18, 20];
+  const spiralNodes = sides.map((s, i) => {
+    const angle = (i / sides.length) * Math.PI * 2 - Math.PI / 2;
+    const radius = 18 + (i / sides.length) * 37;
+    const nodeR = 4 + (i / sides.length) * 9;
+    return {
+      x: cx + Math.cos(angle) * radius,
+      y: cy + Math.sin(angle) * radius,
+      r: nodeR,
+      sides: s,
+      color: `hsl(${240 + i * 8}, 70%, ${50 + i * 2}%)`,
+    };
+  });
+
+  return (
+    <svg width="160" height="160" viewBox="0 0 160 160">
+      <rect width="160" height="160" fill={COLORS.panel} rx="8" />
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke={COLORS.border} strokeWidth="0.5" />
+      {spiralNodes.map((n, i) => (
+        i > 0 && <line key={`l${i}`} x1={spiralNodes[i-1].x} y1={spiralNodes[i-1].y} x2={n.x} y2={n.y}
+          stroke={COLORS.accent1} strokeWidth="0.5" opacity="0.4" />
+      ))}
+      {spiralNodes.map((n, i) => (
+        <g key={i}>
+          <circle cx={n.x} cy={n.y} r={n.r + 2} fill={n.color} opacity={0.2} />
+          <circle cx={n.x} cy={n.y} r={n.r} fill={n.color} opacity={0.9} />
+          <circle cx={n.x} cy={n.y} r={n.r * 0.4} fill="white" opacity={0.3} />
+        </g>
+      ))}
+      <text x="80" y="148" textAnchor="middle" fill={COLORS.muted} fontSize="7" fontFamily="monospace">
+        POLYGON SPIRAL CHAIN · 3→20-GON
+      </text>
+    </svg>
+  );
+};
+
+const ButterflyDiagram = ({ activeNode, setActiveNode }) => {
+  const W = 600, H = 500;
+  const cx = W / 2, cy = H / 2;
+
+  // Global fabric controller - top center
+  const globalFabric = { x: cx, y: 50 };
+
+  // Spine nodes - central vertical axis
+  const spine = [
+    { x: cx, y: 120, label: "L0", color: COLORS.gold },
+    { x: cx, y: 190, label: "L1", color: COLORS.gold },
+    { x: cx, y: 260, label: "L2", color: COLORS.gold },
+    { x: cx, y: 330, label: "L3", color: COLORS.gold },
+    { x: cx, y: 400, label: "L4", color: COLORS.gold },
+  ];
+
+  // Left cluster nodes
+  const leftCluster = [
+    { x: 180, y: 130, label: "CTA-1", color: COLORS.accent1 },
+    { x: 120, y: 180, label: "CTA-2", color: COLORS.accent1 },
+    { x: 200, y: 200, label: "CTA-3", color: COLORS.accent1 },
+    { x: 100, y: 250, label: "CTA-4", color: COLORS.accent2 },
+    { x: 170, y: 270, label: "CTA-5", color: COLORS.accent2 },
+    { x: 80, y: 320, label: "CTA-6", color: COLORS.accent2 },
+    { x: 160, y: 340, label: "CTA-7", color: COLORS.accent3 },
+    { x: 120, y: 390, label: "CTA-8", color: COLORS.accent3 },
+    { x: 200, y: 380, label: "CTA-9", color: COLORS.accent3 },
+    { x: 60, y: 200, label: "R-L1", color: COLORS.green },
+    { x: 50, y: 290, label: "R-L2", color: COLORS.green },
+    { x: 70, y: 380, label: "R-L3", color: COLORS.green },
+  ];
+
+  // Right cluster nodes (mirrored)
+  const rightCluster = leftCluster.map(n => ({
+    ...n,
+    x: W - n.x,
+    label: n.label.replace("CTA", "CTB").replace("R-L", "R-R"),
+  }));
+
+  // Shared cache - bottom
+  const sharedCache = [
+    { x: cx - 80, y: 450, label: "L2$", color: COLORS.accent3 },
+    { x: cx - 30, y: 450, label: "BUF", color: COLORS.accent3 },
+    { x: cx + 30, y: 450, label: "DIR", color: COLORS.accent3 },
+    { x: cx + 80, y: 450, label: "ECC", color: COLORS.accent3 },
+  ];
+
+  const allNodes = [...spine, ...leftCluster, ...rightCluster, ...sharedCache];
+
+  return (
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto" }}>
+      {/* Background */}
+      <rect width={W} height={H} fill={COLORS.bg} />
+
+      {/* Cluster outlines */}
+      <ellipse cx={150} cy={270} rx={130} ry={180} fill={COLORS.accent1} opacity={0.04} stroke={COLORS.accent1} strokeWidth="0.5" strokeOpacity="0.2" />
+      <ellipse cx={W-150} cy={270} rx={130} ry={180} fill={COLORS.accent2} opacity={0.04} stroke={COLORS.accent2} strokeWidth="0.5" strokeOpacity="0.2" />
+
+      {/* Spine connections */}
+      {spine.map((n, i) => i > 0 && (
+        <Link key={`s${i}`} x1={spine[i-1].x} y1={spine[i-1].y} x2={n.x} y2={n.y}
+          color={COLORS.gold} width={2} opacity={0.7} />
+      ))}
+
+      {/* Global fabric to spine */}
+      <Link x1={globalFabric.x} y1={globalFabric.y} x2={spine[0].x} y2={spine[0].y}
+        color={COLORS.gold} width={2} opacity={0.8} />
+
+      {/* Left cluster connections to spine */}
+      {leftCluster.slice(0, 9).map((n, i) => (
+        <Link key={`lc${i}`} x1={n.x} y1={n.y} x2={spine[Math.min(Math.floor(i/3), 4)].x} y2={spine[Math.min(Math.floor(i/3), 4)].y}
+          color={COLORS.accent1} dashed opacity={0.3} />
+      ))}
+
+      {/* Right cluster connections to spine */}
+      {rightCluster.slice(0, 9).map((n, i) => (
+        <Link key={`rc${i}`} x1={n.x} y1={n.y} x2={spine[Math.min(Math.floor(i/3), 4)].x} y2={spine[Math.min(Math.floor(i/3), 4)].y}
+          color={COLORS.accent2} dashed opacity={0.3} />
+      ))}
+
+      {/* Intra-cluster connections left */}
+      {[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,8],[0,9],[3,10],[6,11]].map(([a,b], i) => (
+        <Link key={`il${i}`} x1={leftCluster[a].x} y1={leftCluster[a].y}
+          x2={leftCluster[b].x} y2={leftCluster[b].y}
+          color={COLORS.accent1} opacity={0.25} />
+      ))}
+
+      {/* Intra-cluster connections right */}
+      {[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,8],[0,9],[3,10],[6,11]].map(([a,b], i) => (
+        <Link key={`ir${i}`} x1={rightCluster[a].x} y1={rightCluster[a].y}
+          x2={rightCluster[b].x} y2={rightCluster[b].y}
+          color={COLORS.accent2} opacity={0.25} />
+      ))}
+
+      {/* Cache connections */}
+      {sharedCache.map((n, i) => (
+        <Link key={`ca${i}`} x1={n.x} y1={n.y} x2={spine[4].x} y2={spine[4].y}
+          color={COLORS.accent3} opacity={0.4} />
+      ))}
+
+      {/* High bandwidth bus - horizontal */}
+      <line x1={80} y1={cy} x2={W-80} y2={cy} stroke={COLORS.yellow} strokeWidth="1.5" strokeDasharray="6 3" opacity={0.3} />
+
+      {/* Clock distribution */}
+      <line x1={cx} y1={80} x2={cx} y2={430} stroke={COLORS.red} strokeWidth="1" strokeDasharray="3 3" opacity={0.2} />
+
+      {/* Global fabric controller */}
+      <rect x={cx-70} y={30} width={140} height={28} rx="4" fill={COLORS.panel} stroke={COLORS.gold} strokeWidth="1" />
+      <text x={cx} y={48} textAnchor="middle" fill={COLORS.gold} fontSize="9" fontFamily="monospace" fontWeight="bold">
+        GLOBAL FABRIC CONTROLLER
+      </text>
+
+      {/* Render nodes */}
+      {spine.map((n, i) => (
+        <Node key={`sn${i}`} {...n} size={14} active={activeNode === `s${i}`}
+          onClick={() => setActiveNode(activeNode === `s${i}` ? null : `s${i}`)} />
+      ))}
+      {leftCluster.map((n, i) => (
+        <Node key={`ln${i}`} {...n} size={i < 9 ? 9 : 7} active={activeNode === `l${i}`}
+          onClick={() => setActiveNode(activeNode === `l${i}` ? null : `l${i}`)} />
+      ))}
+      {rightCluster.map((n, i) => (
+        <Node key={`rn${i}`} {...n} size={i < 9 ? 9 : 7} active={activeNode === `r${i}`}
+          onClick={() => setActiveNode(activeNode === `r${i}` ? null : `r${i}`)} />
+      ))}
+      {sharedCache.map((n, i) => (
+        <Node key={`cn${i}`} {...n} size={8} active={activeNode === `c${i}`}
+          onClick={() => setActiveNode(activeNode === `c${i}` ? null : `c${i}`)} />
+      ))}
+
+      {/* Cluster labels */}
+      <text x={150} y={95} textAnchor="middle" fill={COLORS.accent1} fontSize="10" fontFamily="monospace" fontWeight="bold" opacity={0.8}>
+        COMPUTE CLUSTER A
+      </text>
+      <text x={W-150} y={95} textAnchor="middle" fill={COLORS.accent2} fontSize="10" fontFamily="monospace" fontWeight="bold" opacity={0.8}>
+        COMPUTE CLUSTER B
+      </text>
+      <text x={cx} y={470} textAnchor="middle" fill={COLORS.accent3} fontSize="9" fontFamily="monospace" opacity={0.8}>
+        SHARED CACHE / MEMORY FABRIC
+      </text>
+    </svg>
+  );
+};
+
+export default function ButterflyProtocol() {
+  const [activeNode, setActiveNode] = useState(null);
+  const [activeTab, setActiveTab] = useState("architecture");
+
+  const hierarchy = [
+    { level: "L0", name: "Global Fabric", desc: "Central spine — low latency coherence backbone", color: COLORS.gold },
+    { level: "L1", name: "Compute Networks", desc: "Cluster-level interconnect derived from bilateral symmetry", color: COLORS.accent1 },
+    { level: "L2", name: "Local Router Rings", desc: "Recursive NOC — reduces hop count geometrically", color: COLORS.accent2 },
+    { level: "L3", name: "Tile Interconnect", desc: "Modular tile fabric — scalable and symmetric", color: COLORS.accent3 },
+    { level: "L4", name: "Core Level", desc: "Individual compute tile interface", color: COLORS.green },
+  ];
+
+  const specs = [
+    { label: "Process Node", value: "N3/N5 Class", note: "illustrative" },
+    { label: "Die Area", value: "~200 mm²", note: "illustrative" },
+    { label: "Compute Tiles", value: "64 (32/side)", note: "illustrative" },
+    { label: "Network Nodes", value: "96", note: "illustrative" },
+    { label: "I/O Channels", value: "128", note: "illustrative" },
+    { label: "Est. Bandwidth", value: "6.4 TB/s", note: "theoretical" },
+    { label: "Symmetry", value: "Bilateral", note: "geometric" },
+    { label: "Seed Structure", value: "3→20-gon spiral", note: "derived" },
+  ];
+
+  return (
+    <div style={{
+      background: COLORS.bg,
+      minHeight: "100vh",
+      color: COLORS.text,
+      fontFamily: "monospace",
+      padding: "0",
+    }}>
+      {/* Header */}
+      <div style={{
+        background: `linear-gradient(180deg, ${COLORS.panel} 0%, ${COLORS.bg} 100%)`,
+        borderBottom: `1px solid ${COLORS.border}`,
+        padding: "24px 32px 20px",
+      }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
+          <div>
+            <div style={{ color: COLORS.accent1, fontSize: 11, letterSpacing: 4, marginBottom: 6 }}>
+              IOSEPI · GEOMETRIC ARCHITECTURE FRAMEWORK
+            </div>
+            <h1 style={{ margin: 0, fontSize: 28, fontWeight: 900, letterSpacing: 2, color: COLORS.text }}>
+              THE BUTTERFLY PROTOCOL
+            </h1>
+            <div style={{ color: COLORS.highlight, fontSize: 13, marginTop: 4, letterSpacing: 2 }}>
+              A BILATERAL RECURSIVE NETWORK · v1.0
+            </div>
+            <div style={{ color: COLORS.muted, fontSize: 11, marginTop: 8, fontStyle: "italic" }}>
+              Theoretical architecture derived from geometric first principles. Parameters are illustrative — formal validation required.
+            </div>
+          </div>
+          <SeedDiagram />
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display: "flex", gap: 2, marginTop: 20 }}>
+          {["architecture", "hierarchy", "specs", "derivation"].map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)} style={{
+              background: activeTab === tab ? COLORS.accent1 : "transparent",
+              border: `1px solid ${activeTab === tab ? COLORS.accent1 : COLORS.border}`,
+              color: activeTab === tab ? "white" : COLORS.muted,
+              padding: "6px 16px",
+              fontSize: 10,
+              letterSpacing: 2,
+              cursor: "pointer",
+              textTransform: "uppercase",
+              borderRadius: 2,
+            }}>
+              {tab}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{ padding: "24px 32px" }}>
+
+        {activeTab === "architecture" && (
+          <div>
+            <div style={{ display: "flex", gap: 16, marginBottom: 16, flexWrap: "wrap" }}>
+              {[
+                { color: COLORS.gold, label: "Central Spine / Global Fabric" },
+                { color: COLORS.accent1, label: "Cluster A — Compute Tiles" },
+                { color: COLORS.accent2, label: "Cluster B — Compute Tiles" },
+                { color: COLORS.accent3, label: "Shared Cache / Memory" },
+                { color: COLORS.green, label: "Router Rings" },
+              ].map((l, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: l.color }} />
+                  <span style={{ fontSize: 9, color: COLORS.muted, letterSpacing: 1 }}>{l.label}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, overflow: "hidden" }}>
+              <ButterflyDiagram activeNode={activeNode} setActiveNode={setActiveNode} />
+            </div>
+            <div style={{ marginTop: 12, color: COLORS.muted, fontSize: 10, textAlign: "center", letterSpacing: 1 }}>
+              CLICK ANY NODE TO INSPECT · BILATERAL SYMMETRY · ALL CLUSTERS MIRRORED FOR BALANCE
+            </div>
+          </div>
+        )}
+
+        {activeTab === "hierarchy" && (
+          <div style={{ maxWidth: 600 }}>
+            <div style={{ marginBottom: 20, color: COLORS.muted, fontSize: 11, lineHeight: 1.6 }}>
+              Five hierarchy levels emerge naturally from the polygon spiral chain seed structure.
+              Each level corresponds to a scale in the geometric progression.
+            </div>
+            {hierarchy.map((h, i) => (
+              <div key={i} style={{
+                display: "flex", alignItems: "flex-start", gap: 16,
+                padding: "16px 0",
+                borderBottom: `1px solid ${COLORS.border}`,
+              }}>
+                <div style={{
+                  minWidth: 36, height: 36, borderRadius: "50%",
+                  background: h.color, display: "flex", alignItems: "center",
+                  justifyContent: "center", fontSize: 10, fontWeight: "bold",
+                  color: COLORS.bg,
+                }}>
+                  {h.level}
+                </div>
+                <div>
+                  <div style={{ color: h.color, fontSize: 12, fontWeight: "bold", letterSpacing: 2, marginBottom: 4 }}>
+                    {h.name}
+                  </div>
+                  <div style={{ color: COLORS.muted, fontSize: 11, lineHeight: 1.6 }}>
+                    {h.desc}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === "specs" && (
+          <div style={{ maxWidth: 500 }}>
+            <div style={{
+              background: COLORS.panel,
+              border: `1px solid ${COLORS.yellow}`,
+              borderRadius: 6,
+              padding: "12px 16px",
+              marginBottom: 20,
+              fontSize: 10,
+              color: COLORS.yellow,
+              letterSpacing: 1,
+              lineHeight: 1.6,
+            }}>
+              ⚠ ILLUSTRATIVE PARAMETERS · These specifications are theoretical estimates
+              derived from geometric scaling principles. Actual implementation requires
+              full RTL validation, process-specific optimization, and formal verification.
+            </div>
+            {specs.map((s, i) => (
+              <div key={i} style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                padding: "12px 0",
+                borderBottom: `1px solid ${COLORS.border}`,
+              }}>
+                <span style={{ color: COLORS.muted, fontSize: 11, letterSpacing: 1 }}>{s.label}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ color: COLORS.text, fontSize: 12, fontWeight: "bold" }}>{s.value}</span>
+                  <span style={{
+                    fontSize: 8, padding: "2px 6px", borderRadius: 2,
+                    background: s.note === "derived" || s.note === "geometric" ? COLORS.accent1 + "33" : COLORS.yellow + "22",
+                    color: s.note === "derived" || s.note === "geometric" ? COLORS.accent1 : COLORS.yellow,
+                    letterSpacing: 1,
+                  }}>
+                    {s.note.toUpperCase()}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === "derivation" && (
+          <div style={{ maxWidth: 600 }}>
+            <div style={{ marginBottom: 24, color: COLORS.muted, fontSize: 11, lineHeight: 1.8 }}>
+              The Butterfly Protocol is not designed top-down. It is derived from geometric first principles
+              through a progression of structural observations.
+            </div>
+            {[
+              {
+                step: "01",
+                title: "Polygon Spiral Chain Seed",
+                desc: "A spiral chain of polygons progressing from triangle (3-gon) to 20-gon. Each node in the chain is geometrically larger, following the natural scaling of the spiral. This is the generative seed from which all topology emerges.",
+                color: COLORS.accent1,
+              },
+              {
+                step: "02",
+                title: "Bilateral Symmetry Observation",
+                desc: "The seed structure exhibits natural bilateral symmetry when reflected. Two mirrored clusters emerge — Compute Cluster A and B. All nodes are balanced by construction, not by engineering constraint.",
+                color: COLORS.accent2,
+              },
+              {
+                step: "03",
+                title: "Hierarchical Connectivity",
+                desc: "The polygon size progression maps directly to hierarchy levels. Small polygons (L4 — core level) connect upward through intermediate scales to the largest central nodes (L0 — global fabric). The hierarchy is geometric, not arbitrary.",
+                color: COLORS.accent3,
+              },
+              {
+                step: "04",
+                title: "Recursive NOC Emergence",
+                desc: "Within each cluster, the same spiral chain pattern recurses at smaller scale. Local router rings mirror the global topology. Recursive networks reduce hop count — a property that emerges from the geometry rather than being engineered in.",
+                color: COLORS.green,
+              },
+              {
+                step: "05",
+                title: "Central Spine & Shared Fabric",
+                desc: "The central axis of the bilateral structure becomes the global fabric controller and spine — providing low latency coherence across both clusters. The shared cache fabric sits at the base, where the spiral chain terminates.",
+                color: COLORS.gold,
+              },
+            ].map((s, i) => (
+              <div key={i} style={{
+                display: "flex", gap: 20, marginBottom: 24,
+                paddingBottom: 24, borderBottom: `1px solid ${COLORS.border}`,
+              }}>
+                <div style={{
+                  minWidth: 32, color: s.color, fontSize: 18,
+                  fontWeight: 900, letterSpacing: 1, opacity: 0.6,
+                }}>
+                  {s.step}
+                </div>
+                <div>
+                  <div style={{ color: s.color, fontSize: 12, fontWeight: "bold", letterSpacing: 2, marginBottom: 8 }}>
+                    {s.title}
+                  </div>
+                  <div style={{ color: COLORS.muted, fontSize: 11, lineHeight: 1.8 }}>
+                    {s.desc}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div style={{
+        borderTop: `1px solid ${COLORS.border}`,
+        padding: "16px 32px",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: 8,
+      }}>
+        <div style={{ fontSize: 9, color: COLORS.muted, letterSpacing: 2 }}>
+          THE BUTTERFLY PROTOCOL v1.0 · IOSEPI GEOMETRIC ARCHITECTURE FRAMEWORK · © JOSEPH PICCHIOTTI
+        </div>
+        <div style={{ fontSize: 9, color: COLORS.muted, letterSpacing: 1, fontStyle: "italic" }}>
+          Theoretical proposal — not a validated chip design
+        </div>
+      </div>
+    </div>
+  );
+}
