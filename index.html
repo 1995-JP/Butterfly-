@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Butterfly Protocol · IOSEPI</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #050510; font-family: monospace; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: #050510; }
+  ::-webkit-scrollbar-thumb { background: #1a1a3e; border-radius: 3px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+
+const C = {
+  bg: "#050510", panel: "#0a0a1f", border: "#1a1a3e",
+  a1: "#7c3aed", a2: "#3b82f6", a3: "#06b6d4",
+  gold: "#f59e0b", green: "#10b981", red: "#ef4444",
+  yellow: "#eab308", text: "#e2e8f0", muted: "#64748b",
+  hi: "#a78bfa",
+};
+
+const Node = ({ x, y, size = 12, color = C.a1, onClick, active }) => (
+  <g onClick={onClick} style={{ cursor: "pointer" }}>
+    <circle cx={x} cy={y} r={size + 4} fill={color} opacity={active ? 0.3 : 0.1} />
+    <circle cx={x} cy={y} r={size} fill={color} opacity={active ? 1 : 0.85} />
+    <circle cx={x} cy={y} r={size * 0.45} fill="white" opacity={0.25} />
+  </g>
+);
+
+const Link = ({ x1, y1, x2, y2, color = C.a1, dashed, width = 1, opacity = 0.5 }) => (
+  <line x1={x1} y1={y1} x2={x2} y2={y2}
+    stroke={color} strokeWidth={width}
+    strokeDasharray={dashed ? "4 3" : undefined}
+    opacity={opacity} />
+);
+
+function SeedDiagram() {
+  const cx = 80, cy = 80;
+  const sides = [3,5,6,7,8,10,12,14,16,18,20];
+  const nodes = sides.map((s, i) => {
+    const angle = (i / sides.length) * Math.PI * 2 - Math.PI / 2;
+    const radius = 18 + (i / sides.length) * 37;
+    const r = 4 + (i / sides.length) * 9;
+    const hue = 240 + i * 8;
+    return { x: cx + Math.cos(angle) * radius, y: cy + Math.sin(angle) * radius, r, hue };
+  });
+  return (
+    <svg width="160" height="160" viewBox="0 0 160 160">
+      <rect width="160" height="160" fill={C.panel} rx="8" />
+      <circle cx={cx} cy={cy} r={55} fill="none" stroke={C.border} strokeWidth="0.5" />
+      {nodes.map((n, i) => i > 0 && (
+        <line key={i} x1={nodes[i-1].x} y1={nodes[i-1].y} x2={n.x} y2={n.y}
+          stroke={C.a1} strokeWidth="0.5" opacity="0.35" />
+      ))}
+      {nodes.map((n, i) => (
+        <g key={i}>
+          <circle cx={n.x} cy={n.y} r={n.r+2} fill={`hsl(${n.hue},70%,55%)`} opacity={0.2} />
+          <circle cx={n.x} cy={n.y} r={n.r} fill={`hsl(${n.hue},70%,55%)`} opacity={0.9} />
+          <circle cx={n.x} cy={n.y} r={n.r*0.4} fill="white" opacity={0.3} />
+        </g>
+      ))}
+      <text x="80" y="150" textAnchor="middle" fill={C.muted} fontSize="7" fontFamily="monospace">
+        POLYGON SPIRAL CHAIN · 3→20-GON
+      </text>
+    </svg>
+  );
+}
+
+function ButterflyDiagram({ activeNode, setActiveNode }) {
+  const W = 600, H = 500, cx = W/2;
+
+  const spine = [
+    { x: cx, y: 100, color: C.gold },
+    { x: cx, y: 175, color: C.gold },
+    { x: cx, y: 250, color: C.gold },
+    { x: cx, y: 325, color: C.gold },
+    { x: cx, y: 400, color: C.gold },
+  ];
+
+  const left = [
+    { x: 185, y: 125, color: C.a1 }, { x: 120, y: 175, color: C.a1 },
+    { x: 205, y: 195, color: C.a1 }, { x: 100, y: 248, color: C.a2 },
+    { x: 175, y: 265, color: C.a2 }, { x: 80,  y: 318, color: C.a2 },
+    { x: 165, y: 335, color: C.a3 }, { x: 125, y: 385, color: C.a3 },
+    { x: 200, y: 375, color: C.a3 }, { x: 58,  y: 195, color: C.green },
+    { x: 50,  y: 285, color: C.green }, { x: 68, y: 378, color: C.green },
+  ];
+
+  const right = left.map(n => ({ ...n, x: W - n.x,
+    color: n.color === C.a1 ? C.a2 : n.color === C.a2 ? C.a1 : n.color }));
+
+  const cache = [
+    { x: cx-80, y: 448, color: C.a3 }, { x: cx-28, y: 448, color: C.a3 },
+    { x: cx+28, y: 448, color: C.a3 }, { x: cx+80, y: 448, color: C.a3 },
+  ];
+
+  const cacheLabels = ["L2$","BUF","DIR","ECC"];
+  const leftLabels = ["CT-A1","CT-A2","CT-A3","CT-A4","CT-A5","CT-A6","CT-A7","CT-A8","CT-A9","R-A1","R-A2","R-A3"];
+  const rightLabels = leftLabels.map(l => l.replace("-A","-B"));
+  const spineLabels = ["L0","L1","L2","L3","L4"];
+
+  return (
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ width:"100%", height:"auto" }}>
+      <rect width={W} height={H} fill={C.bg} />
+
+      {/* Cluster halos */}
+      <ellipse cx={148} cy={268} rx={128} ry={178} fill={C.a1} opacity={0.04}
+        stroke={C.a1} strokeWidth="0.5" strokeOpacity="0.18" />
+      <ellipse cx={W-148} cy={268} rx={128} ry={178} fill={C.a2} opacity={0.04}
+        stroke={C.a2} strokeWidth="0.5" strokeOpacity="0.18" />
+
+      {/* Spine */}
+      {spine.map((n,i) => i>0 && <Link key={i} x1={spine[i-1].x} y1={spine[i-1].y}
+        x2={n.x} y2={n.y} color={C.gold} width={2} opacity={0.65} />)}
+
+      {/* Global to spine */}
+      <Link x1={cx} y1={52} x2={spine[0].x} y2={spine[0].y} color={C.gold} width={2} opacity={0.7} />
+
+      {/* Cluster to spine */}
+      {left.slice(0,9).map((n,i) => <Link key={i} x1={n.x} y1={n.y}
+        x2={spine[Math.min(Math.floor(i/3),4)].x} y2={spine[Math.min(Math.floor(i/3),4)].y}
+        color={C.a1} dashed opacity={0.25} />)}
+      {right.slice(0,9).map((n,i) => <Link key={i} x1={n.x} y1={n.y}
+        x2={spine[Math.min(Math.floor(i/3),4)].x} y2={spine[Math.min(Math.floor(i/3),4)].y}
+        color={C.a2} dashed opacity={0.25} />)}
+
+      {/* Intra cluster */}
+      {[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,8],[0,9],[3,10],[6,11]].map(([a,b],i) => (
+        <g key={i}>
+          <Link x1={left[a].x} y1={left[a].y} x2={left[b].x} y2={left[b].y} color={C.a1} opacity={0.2} />
+          <Link x1={right[a].x} y1={right[a].y} x2={right[b].x} y2={right[b].y} color={C.a2} opacity={0.2} />
+        </g>
+      ))}
+
+      {/* Cache */}
+      {cache.map((n,i) => <Link key={i} x1={n.x} y1={n.y}
+        x2={spine[4].x} y2={spine[4].y} color={C.a3} opacity={0.35} />)}
+
+      {/* High bandwidth bus */}
+      <line x1={75} y1={250} x2={W-75} y2={250}
+        stroke={C.yellow} strokeWidth="1.5" strokeDasharray="6 3" opacity={0.22} />
+
+      {/* Clock spine */}
+      <line x1={cx} y1={75} x2={cx} y2={430}
+        stroke={C.red} strokeWidth="1" strokeDasharray="3 3" opacity={0.15} />
+
+      {/* Global fabric box */}
+      <rect x={cx-72} y={32} width={144} height={26} rx="4"
+        fill={C.panel} stroke={C.gold} strokeWidth="1" />
+      <text x={cx} y={49} textAnchor="middle" fill={C.gold}
+        fontSize="9" fontFamily="monospace" fontWeight="bold">
+        GLOBAL FABRIC CONTROLLER
+      </text>
+
+      {/* Nodes */}
+      {spine.map((n,i) => (
+        <g key={i}>
+          <Node {...n} size={14} active={activeNode===`s${i}`}
+            onClick={() => setActiveNode(activeNode===`s${i}`?null:`s${i}`)} />
+          <text x={n.x+20} y={n.y+4} fill={C.gold} fontSize="8" fontFamily="monospace">{spineLabels[i]}</text>
+        </g>
+      ))}
+      {left.map((n,i) => (
+        <g key={i}>
+          <Node {...n} size={i<9?9:7} active={activeNode===`l${i}`}
+            onClick={() => setActiveNode(activeNode===`l${i}`?null:`l${i}`)} />
+          <text x={n.x} y={n.y-14} textAnchor="middle" fill={C.muted} fontSize="6" fontFamily="monospace">
+            {leftLabels[i]}
+          </text>
+        </g>
+      ))}
+      {right.map((n,i) => (
+        <g key={i}>
+          <Node {...n} size={i<9?9:7} active={activeNode===`r${i}`}
+            onClick={() => setActiveNode(activeNode===`r${i}`?null:`r${i}`)} />
+          <text x={n.x} y={n.y-14} textAnchor="middle" fill={C.muted} fontSize="6" fontFamily="monospace">
+            {rightLabels[i]}
+          </text>
+        </g>
+      ))}
+      {cache.map((n,i) => (
+        <g key={i}>
+          <Node {...n} size={8} active={activeNode===`c${i}`}
+            onClick={() => setActiveNode(activeNode===`c${i}`?null:`c${i}`)} />
+          <text x={n.x} y={n.y+20} textAnchor="middle" fill={C.a3} fontSize="7" fontFamily="monospace">
+            {cacheLabels[i]}
+          </text>
+        </g>
+      ))}
+
+      {/* Labels */}
+      <text x={148} y={88} textAnchor="middle" fill={C.a1}
+        fontSize="10" fontFamily="monospace" fontWeight="bold" opacity={0.8}>COMPUTE CLUSTER A</text>
+      <text x={W-148} y={88} textAnchor="middle" fill={C.a2}
+        fontSize="10" fontFamily="monospace" fontWeight="bold" opacity={0.8}>COMPUTE CLUSTER B</text>
+      <text x={cx} y={472} textAnchor="middle" fill={C.a3}
+        fontSize="9" fontFamily="monospace" opacity={0.75}>SHARED CACHE / MEMORY FABRIC</text>
+    </svg>
+  );
+}
+
+function App() {
+  const [activeNode, setActiveNode] = React.useState(null);
+  const [tab, setTab] = React.useState("architecture");
+
+  const hierarchy = [
+    { level:"L0", name:"Global Fabric", desc:"Central spine — low latency coherence backbone derived from the largest node in the spiral chain.", color:C.gold },
+    { level:"L1", name:"Compute Networks", desc:"Cluster-level interconnect. Bilateral symmetry emerges from the mirrored seed structure — balanced by geometry, not constraint.", color:C.a1 },
+    { level:"L2", name:"Local Router Rings", desc:"Recursive NOC — the spiral pattern repeats at smaller scale within each cluster, reducing hop count geometrically.", color:C.a2 },
+    { level:"L3", name:"Tile Interconnect", desc:"Modular tile fabric. Scalable and symmetric — each tile interfaces at the same geometric position in the hierarchy.", color:C.a3 },
+    { level:"L4", name:"Core Level", desc:"Individual compute tile interface — corresponds to the smallest polygon nodes at the origin of the spiral chain.", color:C.green },
+  ];
+
+  const specs = [
+    { label:"Process Node", value:"N3/N5 Class", tag:"ILLUSTRATIVE", tc:C.yellow },
+    { label:"Die Area", value:"~200 mm²", tag:"ILLUSTRATIVE", tc:C.yellow },
+    { label:"Compute Tiles", value:"64 (32/side)", tag:"ILLUSTRATIVE", tc:C.yellow },
+    { label:"Network Nodes", value:"96", tag:"ILLUSTRATIVE", tc:C.yellow },
+    { label:"I/O Channels", value:"128", tag:"ILLUSTRATIVE", tc:C.yellow },
+    { label:"Est. Bandwidth", value:"6.4 TB/s", tag:"THEORETICAL", tc:C.yellow },
+    { label:"Symmetry", value:"Bilateral", tag:"GEOMETRIC", tc:C.a1 },
+    { label:"Seed Structure", value:"3→20-gon Spiral", tag:"DERIVED", tc:C.a1 },
+  ];
+
+  const derivation = [
+    { step:"01", title:"Polygon Spiral Chain Seed", color:C.a1,
+      desc:"A spiral chain of polygons progressing from triangle (3-gon) to 20-gon. Each node is geometrically larger following the spiral's natural scaling. This is the generative seed — all topology emerges from it." },
+    { step:"02", title:"Bilateral Symmetry Observation", color:C.a2,
+      desc:"The seed structure exhibits natural bilateral symmetry when reflected. Two mirrored clusters emerge — Compute Cluster A and B. All nodes are balanced by construction, not by engineering constraint." },
+    { step:"03", title:"Hierarchical Connectivity", color:C.a3,
+      desc:"Polygon size progression maps directly to hierarchy levels. Small polygons (L4 — core level) connect upward through intermediate scales to the largest central nodes (L0 — global fabric). The hierarchy is geometric, not arbitrary." },
+    { step:"04", title:"Recursive NOC Emergence", color:C.green,
+      desc:"Within each cluster, the same spiral chain pattern recurses at smaller scale. Local router rings mirror the global topology. Recursive networks reduce hop count — a property that emerges from the geometry rather than being engineered in." },
+    { step:"05", title:"Central Spine & Shared Fabric", color:C.gold,
+      desc:"The central axis of the bilateral structure becomes the global fabric controller and spine — providing low latency coherence across both clusters. The shared cache fabric sits at the base where the spiral chain terminates." },
+  ];
+
+  const tabs = ["architecture","hierarchy","specs","derivation"];
+
+  return (
+    <div style={{ background:C.bg, minHeight:"100vh", color:C.text, fontFamily:"monospace" }}>
+
+      {/* Header */}
+      <div style={{ background:`linear-gradient(180deg,${C.panel} 0%,${C.bg} 100%)`,
+        borderBottom:`1px solid ${C.border}`, padding:"24px 24px 0" }}>
+        <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between",
+          flexWrap:"wrap", gap:16, marginBottom:20 }}>
+          <div>
+            <div style={{ color:C.a1, fontSize:10, letterSpacing:4, marginBottom:6 }}>
+              IOSEPI · GEOMETRIC ARCHITECTURE FRAMEWORK
+            </div>
+            <h1 style={{ margin:0, fontSize:26, fontWeight:900, letterSpacing:2, color:C.text }}>
+              THE BUTTERFLY PROTOCOL
+            </h1>
+            <div style={{ color:C.hi, fontSize:12, marginTop:4, letterSpacing:2 }}>
+              A BILATERAL RECURSIVE NETWORK · v1.0
+            </div>
+            <div style={{ color:C.muted, fontSize:10, marginTop:8, fontStyle:"italic", maxWidth:480, lineHeight:1.6 }}>
+              Theoretical architecture derived from geometric first principles.
+              Parameters are illustrative — formal validation required for implementation.
+            </div>
+            <div style={{ color:C.muted, fontSize:10, marginTop:4 }}>
+              © Joseph Picchiotti · IOSEPI Framework
+            </div>
+          </div>
+          <SeedDiagram />
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display:"flex", gap:2 }}>
+          {tabs.map(t => (
+            <button key={t} onClick={() => setTab(t)} style={{
+              background: tab===t ? C.a1 : "transparent",
+              border:`1px solid ${tab===t ? C.a1 : C.border}`,
+              color: tab===t ? "white" : C.muted,
+              padding:"7px 18px", fontSize:9, letterSpacing:2,
+              cursor:"pointer", textTransform:"uppercase",
+              borderRadius:"3px 3px 0 0", borderBottom:"none",
+              transition:"all 0.15s",
+            }}>{t}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{ padding:"24px" }}>
+
+        {tab === "architecture" && (
+          <div>
+            <div style={{ display:"flex", gap:16, marginBottom:14, flexWrap:"wrap" }}>
+              {[
+                [C.gold,"Central Spine / Global Fabric"],
+                [C.a1,"Cluster A — Compute Tiles"],
+                [C.a2,"Cluster B — Compute Tiles"],
+                [C.a3,"Shared Cache / Memory"],
+                [C.green,"Router Rings"],
+              ].map(([color,label],i) => (
+                <div key={i} style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <div style={{ width:8, height:8, borderRadius:"50%", background:color }} />
+                  <span style={{ fontSize:9, color:C.muted, letterSpacing:1 }}>{label}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ border:`1px solid ${C.border}`, borderRadius:8, overflow:"hidden" }}>
+              <ButterflyDiagram activeNode={activeNode} setActiveNode={setActiveNode} />
+            </div>
+            <div style={{ marginTop:10, color:C.muted, fontSize:9, textAlign:"center", letterSpacing:1 }}>
+              CLICK ANY NODE TO INSPECT · BILATERAL SYMMETRY · ALL CLUSTERS MIRRORED FOR BALANCE
+            </div>
+          </div>
+        )}
+
+        {tab === "hierarchy" && (
+          <div style={{ maxWidth:580 }}>
+            <p style={{ color:C.muted, fontSize:11, lineHeight:1.7, marginBottom:20 }}>
+              Five hierarchy levels emerge naturally from the polygon spiral chain seed structure.
+              Each level corresponds to a scale in the geometric progression — the hierarchy
+              is geometric, not arbitrarily assigned.
+            </p>
+            {hierarchy.map((h,i) => (
+              <div key={i} style={{ display:"flex", alignItems:"flex-start", gap:16,
+                padding:"16px 0", borderBottom:`1px solid ${C.border}` }}>
+                <div style={{ minWidth:38, height:38, borderRadius:"50%", background:h.color,
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                  fontSize:10, fontWeight:"bold", color:C.bg, flexShrink:0 }}>
+                  {h.level}
+                </div>
+                <div>
+                  <div style={{ color:h.color, fontSize:12, fontWeight:"bold",
+                    letterSpacing:2, marginBottom:5 }}>{h.name}</div>
+                  <div style={{ color:C.muted, fontSize:11, lineHeight:1.65 }}>{h.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {tab === "specs" && (
+          <div style={{ maxWidth:500 }}>
+            <div style={{ background:C.panel, border:`1px solid ${C.yellow}`,
+              borderRadius:6, padding:"12px 16px", marginBottom:20,
+              fontSize:10, color:C.yellow, letterSpacing:1, lineHeight:1.7 }}>
+              ⚠ ILLUSTRATIVE PARAMETERS — These specifications are theoretical estimates
+              derived from geometric scaling principles. Actual implementation requires
+              full RTL validation, process-specific optimization, and formal verification.
+              This is a conceptual architecture proposal, not a validated chip design.
+            </div>
+            {specs.map((s,i) => (
+              <div key={i} style={{ display:"flex", justifyContent:"space-between",
+                alignItems:"center", padding:"13px 0", borderBottom:`1px solid ${C.border}` }}>
+                <span style={{ color:C.muted, fontSize:11, letterSpacing:1 }}>{s.label}</span>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <span style={{ color:C.text, fontSize:12, fontWeight:"bold" }}>{s.value}</span>
+                  <span style={{ fontSize:8, padding:"2px 6px", borderRadius:2,
+                    background:s.tc+"22", color:s.tc, letterSpacing:1 }}>{s.tag}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {tab === "derivation" && (
+          <div style={{ maxWidth:580 }}>
+            <p style={{ color:C.muted, fontSize:11, lineHeight:1.7, marginBottom:24 }}>
+              The Butterfly Protocol is not designed top-down. It is derived from geometric
+              first principles through a progression of structural observations — starting
+              from a hand-developed polygon spiral chain.
+            </p>
+            {derivation.map((d,i) => (
+              <div key={i} style={{ display:"flex", gap:20, marginBottom:24,
+                paddingBottom:24, borderBottom:`1px solid ${C.border}` }}>
+                <div style={{ minWidth:30, color:d.color, fontSize:20,
+                  fontWeight:900, letterSpacing:1, opacity:0.55 }}>{d.step}</div>
+                <div>
+                  <div style={{ color:d.color, fontSize:12, fontWeight:"bold",
+                    letterSpacing:2, marginBottom:8 }}>{d.title}</div>
+                  <div style={{ color:C.muted, fontSize:11, lineHeight:1.75 }}>{d.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div style={{ borderTop:`1px solid ${C.border}`, padding:"14px 24px",
+        display:"flex", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
+        <div style={{ fontSize:9, color:C.muted, letterSpacing:2 }}>
+          THE BUTTERFLY PROTOCOL v1.0 · IOSEPI · © JOSEPH PICCHIOTTI
+        </div>
+        <div style={{ fontSize:9, color:C.muted, fontStyle:"italic" }}>
+          Theoretical proposal — not a validated chip design
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App />);
+</script>
+</body>
+</html>
